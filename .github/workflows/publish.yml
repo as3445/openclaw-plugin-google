@@ -50,8 +50,10 @@ jobs:
       - name: Set version
         run: npm version "${{ steps.npm-tag.outputs.version }}" --no-git-tag-version
 
-      - name: Publish to npm (Trusted Publishing via OIDC)
+      - name: Publish to npm
         run: npm publish --provenance --access public --tag "${{ steps.npm-tag.outputs.tag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Create GitHub release from the tag
       - name: Create GitHub Release
