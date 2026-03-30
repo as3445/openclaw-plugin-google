@@ -1,0 +1,11 @@
+export { GoogleMailConfigSchema } from "./config-schema.js";
+export type { GoogleMailConfig } from "./config-schema.js";
+export * from "./api.js";
+export * from "./auth.js";
+export * from "./history.js";
+export * from "./watch.js";
+export * from "./webhook.js";
+export * from "./messages.js";
+export * from "./attachments.js";
+export * from "./actions.js";
+export type * from "./types.js";

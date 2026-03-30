@@ -1,0 +1,87 @@
+{
+  "name": "openclaw-plugin-google",
+  "version": "0.1.0",
+  "description": "Google Calendar and Gmail plugin for OpenClaw - bidirectional calendar events and email",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./calendar": "./dist/src/calendar/index.js",
+    "./mail": "./dist/src/mail/index.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "npx oxlint .",
+    "format": "npx oxfmt --check .",
+    "format:fix": "npx oxfmt --write .",
+    "prepublishOnly": "npm run build && npm run test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.6.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "typescript": "^5.7.0",
+    "vitest": "^3.1.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.3.22"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/as3445/openclaw-plugin-google"
+  },
+  "license": "MIT",
+  "keywords": [
+    "openclaw",
+    "google",
+    "calendar",
+    "gmail",
+    "plugin",
+    "ai",
+    "assistant"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./dist/src/index.js"
+    ],
+    "channels": [
+      {
+        "id": "google-calendar",
+        "label": "Google Calendar",
+        "blurb": "Google Calendar events via push notifications and incremental sync.",
+        "aliases": [
+          "gcal"
+        ]
+      },
+      {
+        "id": "google-mail",
+        "label": "Google Mail",
+        "blurb": "Bidirectional Gmail integration via direct API with multi-account support.",
+        "aliases": [
+          "gmail"
+        ]
+      }
+    ]
+  }
+}
