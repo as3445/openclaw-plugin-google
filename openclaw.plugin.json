@@ -1,0 +1,9 @@
+{
+  "id": "google",
+  "name": "Google Calendar & Gmail",
+  "description": "Google Calendar events and bidirectional Gmail integration with multi-account support",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": true
+  }
+}

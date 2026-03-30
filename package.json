@@ -13,6 +13,7 @@
   "files": [
     "dist",
     "src",
+    "openclaw.plugin.json",
     "package.json",
     "README.md",
     "LICENSE"
@@ -63,25 +64,7 @@
   ],
   "openclaw": {
     "extensions": [
-      "./dist/src/index.js"
-    ],
-    "channels": [
-      {
-        "id": "google-calendar",
-        "label": "Google Calendar",
-        "blurb": "Google Calendar events via push notifications and incremental sync.",
-        "aliases": [
-          "gcal"
-        ]
-      },
-      {
-        "id": "google-mail",
-        "label": "Google Mail",
-        "blurb": "Bidirectional Gmail integration via direct API with multi-account support.",
-        "aliases": [
-          "gmail"
-        ]
-      }
+      "./dist/src/openclaw-entry.js"
     ]
   }
 }
