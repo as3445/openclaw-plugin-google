@@ -69,17 +69,28 @@ export function scheduleWatchRenewal(
 ): () => void {
   const ttlMs = channel.expiration - Date.now();
   if (ttlMs <= 0) {
-    renewFn().catch((err) => {
-      console.error("[google-calendar] immediate watch renewal failed:", err);
-    });
+    // Already expired -- renew immediately.
+    // Wrap in try/catch to handle both sync throws and async rejections.
+    try {
+      renewFn().catch((err) => {
+        console.error("[google-calendar] immediate watch renewal failed:", err);
+      });
+    } catch (err) {
+      console.error("[google-calendar] immediate watch renewal threw synchronously:", err);
+    }
     return () => {};
   }
 
   const renewAtMs = Math.floor(ttlMs * 0.8);
   const timer = setTimeout(() => {
-    renewFn().catch((err) => {
-      console.error("[google-calendar] scheduled watch renewal failed:", err);
-    });
+    // Wrap in try/catch to handle both sync throws and async rejections.
+    try {
+      renewFn().catch((err) => {
+        console.error("[google-calendar] scheduled watch renewal failed:", err);
+      });
+    } catch (err) {
+      console.error("[google-calendar] scheduled watch renewal threw synchronously:", err);
+    }
   }, renewAtMs);
 
   if (typeof timer === "object" && "unref" in timer) {

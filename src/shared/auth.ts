@@ -65,6 +65,9 @@ export function createServiceAccountAuth(config: ServiceAccountConfig): GoogleAu
 /**
  * Obtain an access token string from either an OAuth2Client or GoogleAuth instance.
  * Handles token refresh automatically.
+ *
+ * Callers should clear their auth cache on failure so the next attempt can
+ * rebuild credentials (e.g. after token revocation or credential rotation).
  */
 export async function getAccessToken(auth: OAuth2Client | GoogleAuth): Promise<string> {
   if (auth instanceof OAuth2Client) {

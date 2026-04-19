@@ -69,16 +69,21 @@ export function scheduleWatchRenewal(
   function schedule(watchState: GmailWatchState): void {
     if (cancelled) return;
     const delay = computeWatchRenewalDelay(watchState);
-    currentTimer = setTimeout(async () => {
+    currentTimer = setTimeout(() => {
       if (cancelled) return;
-      try {
-        const newState = await renewFn();
-        schedule(newState);
-      } catch {
-        if (!cancelled) {
-          currentTimer = setTimeout(() => schedule(watchState), 5 * 60 * 1000);
-        }
-      }
+      // Avoid async callback in setTimeout — use .then/.catch to prevent
+      // unhandled promise rejections that crash the Node process.
+      renewFn().then(
+        (newState) => {
+          if (!cancelled) schedule(newState);
+        },
+        () => {
+          // On failure, retry after 5 minutes
+          if (!cancelled) {
+            currentTimer = setTimeout(() => schedule(watchState), 5 * 60 * 1000);
+          }
+        },
+      );
     }, delay);
   }
 
