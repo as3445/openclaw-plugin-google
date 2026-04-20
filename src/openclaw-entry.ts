@@ -4,10 +4,12 @@
  * Registers Google Calendar and Gmail tools so the agent can interact
  * with both APIs. Loaded by `openclaw plugins install openclaw-plugin-google`.
  *
- * Uses dynamic imports for openclaw SDK and typebox so the package
- * builds without those installed (they resolve at runtime via peer dep).
+ * Uses createRequire for openclaw SDK and typebox so the module loads
+ * correctly under jiti's CJS fallback (await import() causes ParseError
+ * when jiti parses the file as CommonJS).
  */
 
+import { createRequire } from "node:module";
 import * as calendarApi from "./calendar/api.js";
 import * as mailApi from "./mail/api.js";
 import { normalizeGmailMessage, formatEmailSummary } from "./mail/messages.js";
@@ -63,19 +65,23 @@ function getMailAccount(): GoogleMailAccountConfig {
 // Dynamic plugin registration (only when loaded inside OpenClaw)
 // ---------------------------------------------------------------------------
 
-async function register() {
-  // Dynamic imports — these only resolve inside an OpenClaw installation
-  let sdk: typeof import("openclaw/plugin-sdk/plugin-entry");
-  let typebox: typeof import("@sinclair/typebox");
+function register() {
+  // Use createRequire instead of await import() — jiti (OpenClaw's plugin
+  // loader) parses files through a CJS fallback where top-level and nested
+  // await causes "Unexpected reserved word 'await'" ParseError.
+  const require = createRequire(import.meta.url);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let sdk: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let Type: any;
   try {
-    sdk = await import("openclaw/plugin-sdk/plugin-entry");
-    typebox = await import("@sinclair/typebox");
+    sdk = require("openclaw/plugin-sdk/plugin-entry");
+    Type = require("@sinclair/typebox").Type;
   } catch {
     // Not inside OpenClaw — standalone library usage, skip registration.
     return;
   }
-
-  const { Type } = typebox;
 
   sdk.definePluginEntry({
     id: "google",
@@ -266,4 +272,4 @@ async function register() {
 }
 
 // Auto-register when loaded
-void register();
+register();

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "include": ["src/openclaw-entry.ts"],
+  "exclude": ["node_modules", "dist"]
+}
