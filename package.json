@@ -1,6 +1,6 @@
 {
   "name": "openclaw-plugin-google",
-  "version": "0.2.1",
+  "version": "0.2.0",
   "description": "Google Calendar and Gmail plugin for OpenClaw - bidirectional calendar events and email",
   "type": "module",
   "main": "dist/src/index.js",
