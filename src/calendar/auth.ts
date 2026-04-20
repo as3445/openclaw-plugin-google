@@ -111,7 +111,14 @@ export async function getCalendarAccessToken(
   account: GoogleCalendarAccountConfig,
 ): Promise<string> {
   const auth = getAuthInstance(account);
-  return getAccessToken(auth);
+  try {
+    return await getAccessToken(auth);
+  } catch (err) {
+    // Clear cached auth on failure so the next attempt rebuilds it
+    // (e.g. after credential rotation or token revocation).
+    authCache.delete(account.accountId);
+    throw err;
+  }
 }
 
 /** Clear the auth cache entry for a given account. Useful after credential rotation. */
