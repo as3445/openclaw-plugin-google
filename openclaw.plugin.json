@@ -1,5 +1,5 @@
 {
-  "id": "google",
+  "id": "google-workspace",
   "name": "Google Calendar & Gmail",
   "description": "Google Calendar events and bidirectional Gmail integration with multi-account support",
   "configSchema": {

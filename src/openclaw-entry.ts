@@ -84,7 +84,7 @@ function register() {
   }
 
   sdk.definePluginEntry({
-    id: "google",
+    id: "google-workspace",
     name: "Google Calendar & Gmail",
     description: "Google Calendar events and bidirectional Gmail via direct API",
 
