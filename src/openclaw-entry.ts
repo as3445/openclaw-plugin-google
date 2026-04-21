@@ -62,33 +62,36 @@ function getMailAccount(): GoogleMailAccountConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Dynamic plugin registration (only when loaded inside OpenClaw)
+// Plugin definition — exported for the OpenClaw plugin loader
 // ---------------------------------------------------------------------------
 
-function register() {
-  // Use createRequire instead of await import() — jiti (OpenClaw's plugin
-  // loader) parses files through a CJS fallback where top-level and nested
-  // await causes "Unexpected reserved word 'await'" ParseError.
-  const require = createRequire(import.meta.url);
+// Use createRequire for @sinclair/typebox — jiti (OpenClaw's plugin loader)
+// parses files through a CJS fallback where dynamic await import() causes
+// "Unexpected reserved word 'await'" ParseError.
+const require = createRequire(import.meta.url);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let sdk: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let Type: any;
-  try {
-    sdk = require("openclaw/plugin-sdk/plugin-entry");
-    Type = require("@sinclair/typebox").Type;
-  } catch {
-    // Not inside OpenClaw — standalone library usage, skip registration.
-    return;
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let Type: any;
+try {
+  Type = require("@sinclair/typebox").Type;
+} catch {
+  // Fallback: define a minimal Type.Object/Type.String/etc. stub
+  // so the module can at least be imported without crashing.
+  const identity = (x?: unknown) => x ?? {};
+  Type = { Object: identity, String: identity, Number: identity, Optional: identity };
+}
 
-  sdk.definePluginEntry({
-    id: "google-workspace",
-    name: "Google Calendar & Gmail",
-    description: "Google Calendar events and bidirectional Gmail via direct API",
+/**
+ * The plugin definition object. OpenClaw's loader imports this module and
+ * reads the `register` export (or default export) to wire up tools.
+ */
+export const id = "google-workspace";
+export const name = "Google Calendar & Gmail";
+export const description = "Google Calendar events and bidirectional Gmail via direct API";
+export const configSchema = { type: "object" as const, additionalProperties: true };
 
-    register(api) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function register(api: any) {
       // =================================================================
       // Calendar tools
       // =================================================================
@@ -267,9 +270,7 @@ function register() {
           return { content: [{ type: "text" as const, text: `Draft created (ID: ${result.id}).` }] };
         },
       });
-    },
-  });
 }
 
-// Auto-register when loaded
-register();
+// Default export for OpenClaw plugin loader compatibility
+export default { id, name, description, configSchema, register };
