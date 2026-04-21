@@ -4,12 +4,10 @@
  * Registers Google Calendar and Gmail tools so the agent can interact
  * with both APIs. Loaded by `openclaw plugins install openclaw-plugin-google`.
  *
- * Uses createRequire for openclaw SDK and typebox so the module loads
- * correctly under jiti's CJS fallback (await import() causes ParseError
- * when jiti parses the file as CommonJS).
+ * Uses plain JSON Schema for tool parameters (no typebox dependency) so the
+ * plugin works regardless of host module resolution.
  */
 
-import { createRequire } from "node:module";
 import * as calendarApi from "./calendar/api.js";
 import * as mailApi from "./mail/api.js";
 import { normalizeGmailMessage, formatEmailSummary } from "./mail/messages.js";
@@ -65,26 +63,6 @@ function getMailAccount(): GoogleMailAccountConfig {
 // Plugin definition — exported for the OpenClaw plugin loader
 // ---------------------------------------------------------------------------
 
-// Use createRequire for @sinclair/typebox — jiti (OpenClaw's plugin loader)
-// parses files through a CJS fallback where dynamic await import() causes
-// "Unexpected reserved word 'await'" ParseError.
-const require = createRequire(import.meta.url);
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let Type: any;
-try {
-  Type = require("@sinclair/typebox").Type;
-} catch {
-  // Fallback: define a minimal Type.Object/Type.String/etc. stub
-  // so the module can at least be imported without crashing.
-  const identity = (x?: unknown) => x ?? {};
-  Type = { Object: identity, String: identity, Number: identity, Optional: identity };
-}
-
-/**
- * The plugin definition object. OpenClaw's loader imports this module and
- * reads the `register` export (or default export) to wire up tools.
- */
 export const id = "google-workspace";
 export const name = "Google Calendar & Gmail";
 export const description = "Google Calendar events and bidirectional Gmail via direct API";
@@ -92,184 +70,224 @@ export const configSchema = { type: "object" as const, additionalProperties: tru
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function register(api: any) {
-      // =================================================================
-      // Calendar tools
-      // =================================================================
+  // =================================================================
+  // Calendar tools
+  // =================================================================
 
-      api.registerTool({
-        name: "google_calendar_list_events",
-        description: "List upcoming Google Calendar events within a date range",
-        parameters: Type.Object({
-          calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
-          timeMin: Type.Optional(Type.String({ description: "Start time (ISO 8601)" })),
-          timeMax: Type.Optional(Type.String({ description: "End time (ISO 8601)" })),
-          maxResults: Type.Optional(Type.Number({ description: "Max events to return (default 10)" })),
-        }),
-        async execute(_id, params) {
-          const account = getCalendarAccount();
-          const events = await calendarApi.listEvents(
-            account,
-            (params as Record<string, unknown>).calendarId as string ?? "primary",
-            {
-              timeMin: (params as Record<string, unknown>).timeMin as string ?? new Date().toISOString(),
-              timeMax: (params as Record<string, unknown>).timeMax as string | undefined,
-              maxResults: (params as Record<string, unknown>).maxResults as number ?? 10,
-            },
-          );
-          const items = (events.items ?? []).map(normalizeCalendarEvent);
-          return { content: [{ type: "text" as const, text: items.map(formatEventSummary).join("\n") || "No events found." }] };
+  api.registerTool({
+    name: "google_calendar_list_events",
+    label: "List Calendar Events",
+    description: "List upcoming Google Calendar events within a date range",
+    parameters: {
+      type: "object",
+      properties: {
+        calendarId: { type: "string", description: "Calendar ID (default: primary)" },
+        timeMin: { type: "string", description: "Start time (ISO 8601)" },
+        timeMax: { type: "string", description: "End time (ISO 8601)" },
+        maxResults: { type: "number", description: "Max events to return (default 10)" },
+      },
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getCalendarAccount();
+      const events = await calendarApi.listEvents(
+        account,
+        (params.calendarId as string) ?? "primary",
+        {
+          timeMin: (params.timeMin as string) ?? new Date().toISOString(),
+          timeMax: params.timeMax as string | undefined,
+          maxResults: (params.maxResults as number) ?? 10,
         },
-      });
+      );
+      const items = (events.items ?? []).map(normalizeCalendarEvent);
+      return { content: [{ type: "text" as const, text: items.map(formatEventSummary).join("\n") || "No events found." }] };
+    },
+  });
 
-      api.registerTool({
-        name: "google_calendar_create_event",
-        description: "Create a new Google Calendar event",
-        parameters: Type.Object({
-          summary: Type.String({ description: "Event title" }),
-          start: Type.String({ description: "Start time (ISO 8601)" }),
-          end: Type.String({ description: "End time (ISO 8601)" }),
-          description: Type.Optional(Type.String({ description: "Event description" })),
-          location: Type.Optional(Type.String({ description: "Event location" })),
-          calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
-        }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getCalendarAccount();
-          const event = await calendarApi.createEvent(account, p.calendarId as string ?? "primary", {
-            summary: p.summary as string,
-            start: { dateTime: p.start as string },
-            end: { dateTime: p.end as string },
-            description: p.description as string | undefined,
-            location: p.location as string | undefined,
-          });
-          return { content: [{ type: "text" as const, text: `Event created: ${event.summary} (${event.htmlLink ?? event.id})` }] };
-        },
+  api.registerTool({
+    name: "google_calendar_create_event",
+    label: "Create Calendar Event",
+    description: "Create a new Google Calendar event",
+    parameters: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "Event title" },
+        start: { type: "string", description: "Start time (ISO 8601)" },
+        end: { type: "string", description: "End time (ISO 8601)" },
+        description: { type: "string", description: "Event description" },
+        location: { type: "string", description: "Event location" },
+        calendarId: { type: "string", description: "Calendar ID (default: primary)" },
+      },
+      required: ["summary", "start", "end"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getCalendarAccount();
+      const event = await calendarApi.createEvent(account, (params.calendarId as string) ?? "primary", {
+        summary: params.summary as string,
+        start: { dateTime: params.start as string },
+        end: { dateTime: params.end as string },
+        description: params.description as string | undefined,
+        location: params.location as string | undefined,
       });
+      return { content: [{ type: "text" as const, text: `Event created: ${event.summary} (${event.htmlLink ?? event.id})` }] };
+    },
+  });
 
-      api.registerTool({
-        name: "google_calendar_delete_event",
-        description: "Delete a Google Calendar event",
-        parameters: Type.Object({
-          eventId: Type.String({ description: "Event ID to delete" }),
-          calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
-        }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getCalendarAccount();
-          await calendarApi.deleteEvent(account, p.calendarId as string ?? "primary", p.eventId as string);
-          return { content: [{ type: "text" as const, text: `Event ${p.eventId} deleted.` }] };
-        },
+  api.registerTool({
+    name: "google_calendar_delete_event",
+    label: "Delete Calendar Event",
+    description: "Delete a Google Calendar event",
+    parameters: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "Event ID to delete" },
+        calendarId: { type: "string", description: "Calendar ID (default: primary)" },
+      },
+      required: ["eventId"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getCalendarAccount();
+      await calendarApi.deleteEvent(account, (params.calendarId as string) ?? "primary", params.eventId as string);
+      return { content: [{ type: "text" as const, text: `Event ${params.eventId} deleted.` }] };
+    },
+  });
+
+  // =================================================================
+  // Gmail tools
+  // =================================================================
+
+  api.registerTool({
+    name: "gmail_send",
+    label: "Send Email",
+    description: "Compose and send a new email via Gmail",
+    parameters: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Comma-separated recipient email addresses" },
+        subject: { type: "string", description: "Email subject line" },
+        body: { type: "string", description: "Plain text email body" },
+        cc: { type: "string", description: "Comma-separated CC addresses" },
+        bcc: { type: "string", description: "Comma-separated BCC addresses" },
+      },
+      required: ["to", "subject", "body"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getMailAccount();
+      const result = await mailApi.sendMessage(account, {
+        to: (params.to as string).split(",").map((s) => s.trim()),
+        cc: params.cc ? (params.cc as string).split(",").map((s) => s.trim()) : undefined,
+        bcc: params.bcc ? (params.bcc as string).split(",").map((s) => s.trim()) : undefined,
+        subject: params.subject as string,
+        body: params.body as string,
       });
+      return { content: [{ type: "text" as const, text: `Email sent (ID: ${result.id}).` }] };
+    },
+  });
 
-      // =================================================================
-      // Gmail tools
-      // =================================================================
+  api.registerTool({
+    name: "gmail_reply",
+    label: "Reply to Email",
+    description: "Reply to an existing email thread",
+    parameters: {
+      type: "object",
+      properties: {
+        originalMessageId: { type: "string", description: "Gmail message ID to reply to" },
+        body: { type: "string", description: "Reply body text" },
+      },
+      required: ["originalMessageId", "body"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getMailAccount();
+      const result = await mailApi.replyToMessage(account, params.originalMessageId as string, params.body as string);
+      return { content: [{ type: "text" as const, text: `Reply sent (ID: ${result.id}).` }] };
+    },
+  });
 
-      api.registerTool({
-        name: "gmail_send",
-        description: "Compose and send a new email via Gmail",
-        parameters: Type.Object({
-          to: Type.String({ description: "Comma-separated recipient email addresses" }),
-          subject: Type.String({ description: "Email subject line" }),
-          body: Type.String({ description: "Plain text email body" }),
-          cc: Type.Optional(Type.String({ description: "Comma-separated CC addresses" })),
-          bcc: Type.Optional(Type.String({ description: "Comma-separated BCC addresses" })),
-        }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getMailAccount();
-          const result = await mailApi.sendMessage(account, {
-            to: (p.to as string).split(",").map((s) => s.trim()),
-            cc: p.cc ? (p.cc as string).split(",").map((s) => s.trim()) : undefined,
-            bcc: p.bcc ? (p.bcc as string).split(",").map((s) => s.trim()) : undefined,
-            subject: p.subject as string,
-            body: p.body as string,
-          });
-          return { content: [{ type: "text" as const, text: `Email sent (ID: ${result.id}).` }] };
-        },
+  api.registerTool({
+    name: "gmail_search",
+    label: "Search Email",
+    description: "Search Gmail using query syntax (e.g. 'from:alice subject:meeting')",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Gmail search query" },
+        maxResults: { type: "number", description: "Max results (default 10)" },
+      },
+      required: ["query"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getMailAccount();
+      const list = await mailApi.listMessages(account, params.query as string, (params.maxResults as number) ?? 10);
+      const ids = (list.messages ?? []).map((m: { id: string }) => m.id);
+      if (ids.length === 0) return { content: [{ type: "text" as const, text: "No messages found." }] };
+      const summaries: string[] = [];
+      for (const mid of ids.slice(0, 10)) {
+        const raw = await mailApi.getMessage(account, mid, "metadata");
+        const msg = normalizeGmailMessage(raw);
+        summaries.push(formatEmailSummary(msg));
+      }
+      return { content: [{ type: "text" as const, text: summaries.join("\n") }] };
+    },
+  });
+
+  api.registerTool({
+    name: "gmail_archive",
+    label: "Archive Email",
+    description: "Archive a Gmail message (remove INBOX label)",
+    parameters: {
+      type: "object",
+      properties: {
+        messageId: { type: "string", description: "Gmail message ID" },
+      },
+      required: ["messageId"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getMailAccount();
+      await mailApi.modifyLabels(account, params.messageId as string, [], ["INBOX"]);
+      return { content: [{ type: "text" as const, text: `Archived ${params.messageId}.` }] };
+    },
+  });
+
+  api.registerTool({
+    name: "gmail_mark_read",
+    label: "Mark Email Read",
+    description: "Mark a Gmail message as read",
+    parameters: {
+      type: "object",
+      properties: {
+        messageId: { type: "string", description: "Gmail message ID" },
+      },
+      required: ["messageId"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getMailAccount();
+      await mailApi.modifyLabels(account, params.messageId as string, [], ["UNREAD"]);
+      return { content: [{ type: "text" as const, text: `Marked ${params.messageId} as read.` }] };
+    },
+  });
+
+  api.registerTool({
+    name: "gmail_draft",
+    label: "Create Email Draft",
+    description: "Create an email draft without sending",
+    parameters: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Comma-separated recipients" },
+        subject: { type: "string", description: "Subject line" },
+        body: { type: "string", description: "Email body" },
+      },
+      required: ["to", "subject", "body"],
+    },
+    async execute(_id: string, params: Record<string, unknown>) {
+      const account = getMailAccount();
+      const result = await mailApi.createDraft(account, {
+        to: (params.to as string).split(",").map((s) => s.trim()),
+        subject: params.subject as string,
+        body: params.body as string,
       });
-
-      api.registerTool({
-        name: "gmail_reply",
-        description: "Reply to an existing email thread",
-        parameters: Type.Object({
-          originalMessageId: Type.String({ description: "Gmail message ID to reply to" }),
-          body: Type.String({ description: "Reply body text" }),
-        }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getMailAccount();
-          const result = await mailApi.replyToMessage(account, p.originalMessageId as string, p.body as string);
-          return { content: [{ type: "text" as const, text: `Reply sent (ID: ${result.id}).` }] };
-        },
-      });
-
-      api.registerTool({
-        name: "gmail_search",
-        description: "Search Gmail using query syntax (e.g. 'from:alice subject:meeting')",
-        parameters: Type.Object({
-          query: Type.String({ description: "Gmail search query" }),
-          maxResults: Type.Optional(Type.Number({ description: "Max results (default 10)" })),
-        }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getMailAccount();
-          const list = await mailApi.listMessages(account, p.query as string, (p.maxResults as number) ?? 10);
-          const ids = (list.messages ?? []).map((m) => m.id);
-          if (ids.length === 0) return { content: [{ type: "text" as const, text: "No messages found." }] };
-          const summaries: string[] = [];
-          for (const id of ids.slice(0, 10)) {
-            const raw = await mailApi.getMessage(account, id, "metadata");
-            const msg = normalizeGmailMessage(raw);
-            summaries.push(formatEmailSummary(msg));
-          }
-          return { content: [{ type: "text" as const, text: summaries.join("\n") }] };
-        },
-      });
-
-      api.registerTool({
-        name: "gmail_archive",
-        description: "Archive a Gmail message (remove INBOX label)",
-        parameters: Type.Object({ messageId: Type.String({ description: "Gmail message ID" }) }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getMailAccount();
-          await mailApi.modifyLabels(account, p.messageId as string, [], ["INBOX"]);
-          return { content: [{ type: "text" as const, text: `Archived ${p.messageId}.` }] };
-        },
-      });
-
-      api.registerTool({
-        name: "gmail_mark_read",
-        description: "Mark a Gmail message as read",
-        parameters: Type.Object({ messageId: Type.String({ description: "Gmail message ID" }) }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getMailAccount();
-          await mailApi.modifyLabels(account, p.messageId as string, [], ["UNREAD"]);
-          return { content: [{ type: "text" as const, text: `Marked ${p.messageId} as read.` }] };
-        },
-      });
-
-      api.registerTool({
-        name: "gmail_draft",
-        description: "Create an email draft without sending",
-        parameters: Type.Object({
-          to: Type.String({ description: "Comma-separated recipients" }),
-          subject: Type.String({ description: "Subject line" }),
-          body: Type.String({ description: "Email body" }),
-        }),
-        async execute(_id, params) {
-          const p = params as Record<string, unknown>;
-          const account = getMailAccount();
-          const result = await mailApi.createDraft(account, {
-            to: (p.to as string).split(",").map((s) => s.trim()),
-            subject: p.subject as string,
-            body: p.body as string,
-          });
-          return { content: [{ type: "text" as const, text: `Draft created (ID: ${result.id}).` }] };
-        },
-      });
+      return { content: [{ type: "text" as const, text: `Draft created (ID: ${result.id}).` }] };
+    },
+  });
 }
 
 // Default export for OpenClaw plugin loader compatibility
